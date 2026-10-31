@@ -1,20 +1,27 @@
-import io.deepmedia.tools.deployer.DeployerExtension
+import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.ClasspathNormalizer
+import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.javadoc.Javadoc
+import org.gradle.api.tasks.testing.Test
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.process.CommandLineArgumentProvider
 
 plugins {
     base
-    id("io.deepmedia.tools.deployer") version "0.16.0" apply false
+    id("maven-publish")
 }
 
-subprojects {
-    apply(plugin = "java-library")
-    apply(plugin = "maven-publish")
-    apply(plugin = "io.deepmedia.tools.deployer")
+val javaVersion = 21
 
+subprojects {
     group = rootProject.group
     version = rootProject.version
+
+    apply(plugin = "java-library")
+    apply(plugin = "maven-publish")
 
     repositories {
         mavenCentral()
@@ -23,14 +30,16 @@ subprojects {
     }
 
     extensions.configure<JavaPluginExtension> {
-        toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        }
         withJavadocJar()
         withSourcesJar()
     }
 
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
-        options.release.set(21)
+        options.release.set(javaVersion)
         options.compilerArgs.add("-parameters")
     }
 
@@ -39,7 +48,8 @@ subprojects {
             encoding = "UTF-8"
             charSet = "UTF-8"
             docEncoding = "UTF-8"
-            addStringOption("Xdoclint:none", "-quiet")
+            quiet()
+            addBooleanOption("Xdoclint:none", true)
         }
     }
 
@@ -66,17 +76,15 @@ subprojects {
         "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
     }
 
-    extensions.configure<PublishingExtension> {
+    publishing {
         publications {
             create<MavenPublication>("maven") {
-                groupId = project.group.toString()
                 artifactId = project.name
-                version = project.version.toString()
                 from(components["java"])
                 pom {
                     name.set(project.name)
                     description.set("Winter command integration for Cloud on Paper and Velocity.")
-                    url.set("https://github.com/thewinterframework/command")
+                    url.set("https://github.com/anmvc/winter-command")
                     licenses {
                         license {
                             name.set("MIT")
@@ -90,40 +98,12 @@ subprojects {
                         }
                     }
                     scm {
-                        url.set("https://github.com/thewinterframework/command")
-                        connection.set("scm:git:git://github.com/thewinterframework/command.git")
-                        developerConnection.set("scm:git:ssh://git@github.com/thewinterframework/command.git")
+                        url.set("https://github.com/anmvc/winter-command")
+                        connection.set("scm:git:git://github.com/anmvc/winter-command.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/anmvc/winter-command.git")
                     }
                 }
             }
-        }
-    }
-
-    extensions.configure<DeployerExtension> {
-        signing {
-            key.set(secret("winterSigningKey"))
-            password.set(secret("winterSigningPassphrase"))
-        }
-        content {
-            component {
-                fromMavenPublication("maven", clone = true)
-            }
-        }
-        projectInfo {
-            description.set("Winter command integration for Cloud on Paper and Velocity.")
-            url.set("https://github.com/thewinterframework/command")
-            license(MIT)
-            groupId.set(project.group.toString())
-            artifactId.set(project.name)
-            scm.fromGithub("thewinterframework", "command")
-            developer("Diego Cardenas", "diego.cardenas.v06@gmail.com")
-        }
-        localSpec()
-        centralPortalSpec {
-            signing.key.set(secret("winterSigningKey"))
-            signing.password.set(secret("winterSigningPassphrase"))
-            auth.user.set(secret("winterRepositoryUsername"))
-            auth.password.set(secret("winterRepositoryPassword"))
         }
     }
 }
@@ -137,6 +117,8 @@ configure(subprojects.filter { it.name != "command-core" }) {
     }
 }
 
+tasks.named("assemble") { dependsOn(subprojects.map { "${it.path}:assemble" }) }
 tasks.named("build") { dependsOn(subprojects.map { "${it.path}:build" }) }
 tasks.named("check") { dependsOn(subprojects.map { "${it.path}:check" }) }
 tasks.named("clean") { dependsOn(subprojects.map { "${it.path}:clean" }) }
+tasks.named("publishToMavenLocal") { dependsOn(subprojects.map { "${it.path}:publishToMavenLocal" }) }
