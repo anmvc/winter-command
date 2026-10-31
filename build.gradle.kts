@@ -19,6 +19,7 @@ subprojects {
     repositories {
         mavenCentral()
         maven("https://repo.papermc.io/repository/maven-public/")
+        maven("https://jitpack.io")
     }
 
     extensions.configure<JavaPluginExtension> {
@@ -29,6 +30,7 @@ subprojects {
 
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
+        options.release.set(21)
         options.compilerArgs.add("-parameters")
     }
 

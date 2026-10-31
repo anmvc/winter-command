@@ -564,6 +564,200 @@ public class CommandModuleTest {
         }
     }
 
+    @Test
+    void integratesWithWinterUnifiedComponentsAndPluginModuleManager(
+            @TempDir final Path tempDir
+    ) throws Exception {
+        final Path outDir = tempDir.resolve("winter3-integration");
+        compileProcessedSources(outDir, Map.of(
+                "ktsample/TestBootPlugin.java", """
+                        package ktsample;
+                        import com.google.inject.Binder;
+                        import com.google.inject.Guice;
+                        import com.google.inject.Injector;
+                        import com.google.inject.Module;
+                        import com.google.inject.TypeLiteral;
+                        import com.thewinterframework.command.CommandModuleTest.Sender;
+                        import com.thewinterframework.expression.ExpressionResolver;
+                        import com.thewinterframework.plugin.WinterBootPlugin;
+                        import com.thewinterframework.plugin.WinterPlugin;
+                        import com.thewinterframework.plugin.module.PluginModuleManager;
+                        import com.thewinterframework.plugin.platform.PlatformPluginManager;
+                        import com.thewinterframework.scheduler.PluginScheduler;
+                        import java.util.ArrayList;
+                        import java.util.List;
+                        import java.util.concurrent.atomic.AtomicReference;
+                        import org.incendo.cloud.CommandManager;
+                        import org.incendo.cloud.annotations.AnnotationParser;
+                        import org.slf4j.Logger;
+                        import org.slf4j.helpers.NOPLogger;
+                        @WinterBootPlugin
+                        public final class TestBootPlugin implements WinterPlugin {
+                            private final PluginModuleManager moduleManager = new PluginModuleManager(this);
+                            private final List<String> lifecycle = new ArrayList<>();
+                            private final AtomicReference<String> output = new AtomicReference<>();
+                            private Injector injector;
+                            private CommandManager<Sender> manager;
+                            private AnnotationParser<Sender> parser;
+                            public void bindCommandRuntime(
+                                    final CommandManager<Sender> manager,
+                                    final AnnotationParser<Sender> parser
+                            ) {
+                                this.manager = manager;
+                                this.parser = parser;
+                            }
+                            public void startCycle() {
+                                if (!moduleManager.scanModules() || !moduleManager.loadModules()) {
+                                    throw new IllegalStateException("load failed");
+                                }
+                                final var modules = new ArrayList<Module>(moduleManager.asGuiceModules());
+                                modules.add(this);
+                                this.injector = Guice.createInjector(modules);
+                                if (!moduleManager.injectModules() || !moduleManager.enableModules()) {
+                                    throw new IllegalStateException("enable failed");
+                                }
+                            }
+                            public void stopCycle() {
+                                if (!moduleManager.disableModules()) {
+                                    throw new IllegalStateException("disable failed");
+                                }
+                            }
+                            public List<String> lifecycle() { return lifecycle; }
+                            public AtomicReference<String> output() { return output; }
+                            @Override
+                            public void configure(final Binder binder) {
+                                binder.bind(WinterPlugin.class).toInstance(this);
+                                binder.bind(new TypeLiteral<List<String>>() {}).toInstance(lifecycle);
+                                binder.bind(new TypeLiteral<AtomicReference<String>>() {}).toInstance(output);
+                                binder.bind(new TypeLiteral<CommandManager<Sender>>() {}).toInstance(manager);
+                                binder.bind(new TypeLiteral<AnnotationParser<Sender>>() {}).toInstance(parser);
+                            }
+                            @Override public String namespace() { return "ktsample"; }
+                            @Override public Injector getInjector() { return injector; }
+                            @Override public Logger getSLF4JLogger() { return NOPLogger.NOP_LOGGER; }
+                            @Override public PluginModuleManager getModuleManager() { return moduleManager; }
+                            @Override public ExpressionResolver getExpressionResolver() { return null; }
+                            @Override public void setExpressionResolver(final ExpressionResolver resolver) {}
+                            @Override public PluginScheduler getScheduler() { return null; }
+                            @Override public PlatformPluginManager getPlatformManager() { return null; }
+                        }
+                        """,
+                "ktsample/UnifiedGreetingComponent.java", """
+                        package ktsample;
+                        import com.google.inject.Inject;
+                        import com.thewinterframework.component.annotation.Component;
+                        import com.thewinterframework.service.annotation.lifecycle.OnDisable;
+                        import com.thewinterframework.service.annotation.lifecycle.OnEnable;
+                        import java.util.List;
+                        @Component
+                        public final class UnifiedGreetingComponent {
+                            private final List<String> lifecycle;
+                            @Inject
+                            public UnifiedGreetingComponent(final List<String> lifecycle) {
+                                this.lifecycle = lifecycle;
+                            }
+                            @OnEnable
+                            public void onEnable() {
+                                lifecycle.add("component-enable");
+                            }
+                            @OnDisable
+                            public void onDisable() {
+                                lifecycle.add("component-disable");
+                            }
+                            public String greet(final String who) {
+                                return "hello:" + who;
+                            }
+                        }
+                        """,
+                "ktsample/UnifiedGreetCommand.java", """
+                        package ktsample;
+                        import com.google.inject.Inject;
+                        import com.thewinterframework.command.CommandComponent;
+                        import com.thewinterframework.command.CommandModuleTest.Sender;
+                        import java.util.concurrent.atomic.AtomicReference;
+                        import org.incendo.cloud.annotations.Command;
+                        @CommandComponent
+                        public final class UnifiedGreetCommand {
+                            private final UnifiedGreetingComponent greeting;
+                            private final AtomicReference<String> output;
+                            @Inject
+                            public UnifiedGreetCommand(
+                                    final UnifiedGreetingComponent greeting,
+                                    final AtomicReference<String> output
+                            ) {
+                                this.greeting = greeting;
+                                this.output = output;
+                            }
+                            @Command("greet")
+                            public void greet(final Sender sender) {
+                                output.set(greeting.greet(sender.name()));
+                            }
+                        }
+                        """,
+                "ktsample/IsolatedModule.java", """
+                        package ktsample;
+                        import com.thewinterframework.command.CommandModule;
+                        import com.thewinterframework.command.CommandModuleTest.Sender;
+                        import com.thewinterframework.plugin.WinterPlugin;
+                        import io.leangen.geantyref.TypeToken;
+                        import java.util.List;
+                        public final class IsolatedModule extends CommandModule<Sender> {
+                            public IsolatedModule() {
+                                super(TypeToken.get(Sender.class));
+                            }
+                            @Override
+                            protected void disableComponent(
+                                    final WinterPlugin plugin, final Class<?> componentClass
+                            ) {
+                                plugin.getInjector()
+                                        .getInstance(new com.google.inject.Key<List<String>>() {})
+                                        .add("command-disable:" + componentClass.getSimpleName());
+                            }
+                        }
+                        """
+        ));
+
+        try (final var loader = new URLClassLoader(
+                new URL[]{outDir.toUri().toURL()},
+                CommandModuleTest.class.getClassLoader()
+        )) {
+            final var pluginClass = loader.loadClass("ktsample.TestBootPlugin");
+            final var plugin = pluginClass.getDeclaredConstructor().newInstance();
+            final var bindMethod = pluginClass.getMethod(
+                    "bindCommandRuntime", CommandManager.class, AnnotationParser.class);
+            final var startCycle = pluginClass.getMethod("startCycle");
+            final var stopCycle = pluginClass.getMethod("stopCycle");
+            @SuppressWarnings("unchecked")
+            final var lifecycle = (List<String>) pluginClass.getMethod("lifecycle").invoke(plugin);
+            @SuppressWarnings("unchecked")
+            final var output = (AtomicReference<String>) pluginClass.getMethod("output").invoke(plugin);
+
+            final var firstManager = new TestManager(true);
+            bindMethod.invoke(plugin, firstManager, new AnnotationParser<>(firstManager, Sender.class));
+            startCycle.invoke(plugin);
+            assertTrue(lifecycle.contains("component-enable"));
+            firstManager.commandExecutor().executeCommand(new Sender("dana"), "greet").join();
+            assertEquals("hello:dana", output.get());
+
+            stopCycle.invoke(plugin);
+            assertTrue(lifecycle.contains("component-disable"));
+            assertTrue(lifecycle.contains("command-disable:UnifiedGreetCommand"));
+            assertTrue(firstManager.rootCommands().isEmpty());
+
+            // Verify reload cycle with a fresh command manager & injector on the samePluginModuleManager
+            lifecycle.clear();
+            final var secondManager = new TestManager(true);
+            bindMethod.invoke(plugin, secondManager, new AnnotationParser<>(secondManager, Sender.class));
+            startCycle.invoke(plugin);
+            secondManager.commandExecutor().executeCommand(new Sender("eli"), "greet").join();
+            assertEquals("hello:eli", output.get());
+            stopCycle.invoke(plugin);
+            assertTrue(lifecycle.contains("component-enable"));
+            assertTrue(lifecycle.contains("component-disable"));
+            assertTrue(lifecycle.contains("command-disable:UnifiedGreetCommand"));
+        }
+    }
+
     private static void compileProcessedSources(
             final Path outputDir, final Map<String, String> sources
     ) throws Exception {
@@ -600,7 +794,7 @@ public class CommandModuleTest {
             assertTrue(compiler.getTask(null, fm, null, opts, null, units).call());
         }
         final Path serviceFile = procClasses.resolve(
-                "META-INF/services/com.thewinterframework.processor.handler.WinterAnnotationProcessor");
+                "META-INF/services/com.thewinterframework.processor.extension.WinterProcessorExtension");
         Files.createDirectories(serviceFile.getParent());
         Files.writeString(serviceFile, "testproc.TestCommandProcessor\n", StandardCharsets.UTF_8);
 

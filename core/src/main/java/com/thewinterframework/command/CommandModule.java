@@ -341,6 +341,7 @@ public abstract class CommandModule<C> extends AbstractProcessorModule {
         }
 
         parsedComponents.clear();
+        enabledComponents.clear();
         var succeeded = false;
         try {
             final var start = System.currentTimeMillis();
@@ -348,11 +349,11 @@ public abstract class CommandModule<C> extends AbstractProcessorModule {
             final var sortedComponents = activeComponents.stream()
                     .sorted(COMPONENT_COMPARATOR)
                     .toList();
-            final var enabledComponents = new ArrayList<Class<?>>(sortedComponents.size());
+            final var candidatesToEnable = new ArrayList<Class<?>>(sortedComponents.size());
             for (final var componentClass : sortedComponents) {
                 final var enableContext = new ConditionContext(plugin, componentClass);
                 if (evaluateConditions(componentClass, Stage.ENABLE, enableContext, conditionInjector)) {
-                    enabledComponents.add(componentClass);
+                    candidatesToEnable.add(componentClass);
                 } else if (plugin.getSLF4JLogger() != null) {
                     plugin.getSLF4JLogger().debug(
                             "Skipped ENABLE (Condition failed) for {}", componentClass.getSimpleName());
@@ -362,13 +363,14 @@ public abstract class CommandModule<C> extends AbstractProcessorModule {
             if (KotlinRuntime.HAS_COROUTINES) {
                 activeCoroutineEnvironment = memoize(() -> KotlinCoroutinesBridge.resolveEnvironment(
                         injector,
-                        enabledComponents,
+                        candidatesToEnable,
                         clazz -> resolveInstance(injector, clazz)
                 ));
             }
 
-            for (final var componentClass : enabledComponents) {
+            for (final var componentClass : candidatesToEnable) {
                 enableComponent(plugin, componentClass);
+                enabledComponents.add(componentClass);
             }
 
             if (plugin.getSLF4JLogger() != null) {
@@ -384,7 +386,7 @@ public abstract class CommandModule<C> extends AbstractProcessorModule {
             if (KotlinRuntime.HAS_COROUTINE_ANNOTATIONS) {
                 KotlinAnnotationsBridge.installCoroutineSupport(annotationParser, activeCoroutineEnvironment);
             } else if (wire instanceof CommandComponentWire componentWire) {
-                validateNoUnsupportedSuspendMethods(enabledComponents, componentWire.suspendingCommandMethods());
+                validateNoUnsupportedSuspendMethods(candidatesToEnable, componentWire.suspendingCommandMethods());
             }
             if (!parsedComponents.isEmpty()) {
                 annotationParser.parse(List.copyOf(parsedComponents));

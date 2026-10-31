@@ -4,7 +4,9 @@ import com.thewinterframework.command.CommandComponent;
 import com.thewinterframework.command.CommandModule;
 import com.thewinterframework.processor.clazz.ClassWireProcessor;
 import com.thewinterframework.processor.context.ProcessorContext;
+import com.thewinterframework.processor.extension.WinterProcessorExtension;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -18,7 +20,6 @@ import javax.lang.model.type.TypeMirror;
 import javax.tools.Diagnostic;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +31,7 @@ import java.util.TreeSet;
  * Shared Winter annotation processor support for {@link CommandComponent} discovery, validation,
  * and reflection-free {@link CommandComponentWire} code generation.
  */
-public abstract class AbstractCommandComponentProcessor extends ClassWireProcessor {
+public abstract class AbstractCommandComponentProcessor implements WinterProcessorExtension {
     private static final Set<String> INJECT_ANNOTATIONS = Set.of(
             "com.google.inject.Inject",
             "jakarta.inject.Inject",
@@ -50,6 +51,7 @@ public abstract class AbstractCommandComponentProcessor extends ClassWireProcess
     private final Map<String, String> singletonSuppliers = new TreeMap<>();
     private final Map<String, String> staticInjectionTargets = new TreeMap<>();
     private final Map<String, String> suspendingMethods = new TreeMap<>();
+    protected ProcessingEnvironment env;
     private boolean conflicting;
     private boolean conflictReported;
 
@@ -59,13 +61,31 @@ public abstract class AbstractCommandComponentProcessor extends ClassWireProcess
      */
     protected abstract String moduleClassName();
 
-    @Override
-    protected final Class<? extends Annotation> wiredAnnotation() {
-        return CommandComponent.class;
+    /**
+     * Allows platform processors to reject elements that do not satisfy additional constraints.
+     * @param annotation the processed annotation type
+     * @param element the annotated element
+     * @param context the current processor context
+     * @return {@code true} to include the component
+     */
+    protected boolean filter(
+            final TypeElement annotation, final Element element, final ProcessorContext context
+    ) {
+        return true;
     }
 
     @Override
-    public void onRoundStart(final ProcessorContext context) {
+    public void initialize(final ProcessingEnvironment environment) {
+        this.env = environment;
+    }
+
+    @Override
+    public final Set<String> supportedAnnotationNames() {
+        return Set.of(CommandComponent.class.getCanonicalName());
+    }
+
+    @Override
+    public void onRoundStarted(final ProcessorContext context) {
         final var targetModule = moduleClassName();
         for (final var existing : context.getRequiredModules()) {
             if (!existing.equals(targetModule) && isCommandModule(existing)) {
@@ -86,7 +106,7 @@ public abstract class AbstractCommandComponentProcessor extends ClassWireProcess
     }
 
     @Override
-    public void handle(
+    public void process(
             final TypeElement annotation,
             final Set<? extends Element> elements,
             final ProcessorContext context
@@ -162,7 +182,7 @@ public abstract class AbstractCommandComponentProcessor extends ClassWireProcess
     }
 
     @Override
-    public void onProcessingComplete(final ProcessorContext context) {
+    public void onProcessingFinished(final ProcessorContext context) {
         if (conflicting) {
             return;
         }
@@ -174,7 +194,7 @@ public abstract class AbstractCommandComponentProcessor extends ClassWireProcess
             );
             return;
         }
-        final var className = wiredClassName(wiredAnnotation());
+        final var className = ClassWireProcessor.wiredClassName(CommandComponent.class);
         final var packageName = context.getWinterModulePackageString();
         writeCommandComponentWire(context, className, packageName);
     }

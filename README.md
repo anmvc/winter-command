@@ -1,6 +1,6 @@
 # Winter Command
 
-Integrates [Incendo Cloud](https://cloud.incendo.org/) with Winter components and dependency injection for **Paper** and **Velocity**. Core and Velocity require **Java 21**; Paper requires **Java 25**.
+Integrates [Incendo Cloud](https://cloud.incendo.org/) with Winter components and dependency injection for **Paper** and **Velocity**. All modules target **Java 21** (`--release 21`) and work on Java 21+ (Paper 1.20.6+ and Velocity 3.4+) as well as Java 25+ (Paper 26.2+).
 
 ## Modules
 
@@ -16,23 +16,24 @@ Each adapter includes `command-core` transitively. Use one adapter per plugin an
 
 | Dependency | Version |
 | --- | --- |
-| Winter Core / Paper / Velocity | `2.3.0` |
+| Winter Core / Paper / Velocity (`com.github.anmvc.winter` via JitPack) | `b30ffd6ab7` |
 | Cloud Core / Annotations | `2.1.0` |
 | Cloud Paper / Velocity | `2.0.1` |
 | Velocity API used for compilation | `3.4.0-SNAPSHOT` |
-| Paper API used for compilation | `26.2.build.134-stable` |
-| Adventure | `5.2.0` |
+| Paper API used for compilation | `1.20.6-R0.1-SNAPSHOT` |
+| Adventure | `4.17.0` (compatible with Adventure `4.17+` and `5.x`) |
 
 Cloud versions its [core and annotations](https://github.com/Incendo/cloud/releases) independently from its [Minecraft integrations](https://github.com/Incendo/cloud-minecraft/releases). Dependency versions are centralized in `gradle.properties`.
 
 ## Installation
 
-The following examples use Gradle Kotlin DSL and Maven Central coordinates for Winter `2.3.0` and Winter Command `3.1.0`.
+The following examples use Gradle Kotlin DSL with the `anmvc/winter` fork on JitPack (`b30ffd6ab7`) and Winter Command `3.1.0`.
 
 ```kotlin
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://jitpack.io")
 }
 
 java {
@@ -47,20 +48,16 @@ tasks.withType<JavaCompile>().configureEach {
 ### Paper
 
 ```kotlin
-java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(25))
-}
-
 dependencies {
-    implementation("com.thewinterframework:paper:2.3.0")
-    annotationProcessor("com.thewinterframework:paper:2.3.0")
+    implementation("com.github.anmvc.winter:paper:b30ffd6ab7")
+    annotationProcessor("com.github.anmvc.winter:paper:b30ffd6ab7")
 
     implementation("com.thewinterframework:command-paper:3.1.0")
     annotationProcessor("com.thewinterframework:command-paper:3.1.0")
 }
 ```
 
-The plugin must extend `PaperWinterPlugin` and declare `@WinterBootPlugin`. `PaperCommandModule` creates the command manager during plugin enable using `PaperCommandManager.buildOnEnable`. This adapter targets Paper **26.2** with Winter **2.3.0** and Java **25**.
+The plugin must extend `PaperWinterPlugin` and declare `@WinterBootPlugin`. `PaperCommandModule` creates the command manager during plugin enable using `PaperCommandManager.buildOnEnable`. This adapter supports Paper **1.20.6+** (including **26.2+**) on Java **21+**.
 
 ```java
 import com.thewinterframework.command.CommandComponent;
@@ -82,8 +79,8 @@ You can inject `PaperCommandManager<Source>`, `CommandManager<Source>`, and `Ann
 
 ```kotlin
 dependencies {
-    implementation("com.thewinterframework:velocity:2.3.0")
-    annotationProcessor("com.thewinterframework:velocity:2.3.0")
+    implementation("com.github.anmvc.winter:velocity:b30ffd6ab7")
+    annotationProcessor("com.github.anmvc.winter:velocity:b30ffd6ab7")
 
     implementation("com.thewinterframework:command-velocity:3.1.0")
     annotationProcessor("com.thewinterframework:command-velocity:3.1.0")
@@ -111,7 +108,7 @@ You can inject `VelocityCommandManager<CommandSource>`, `CommandManager<CommandS
 
 ## Command extensions
 
-Winter discovers classes annotated with `@CommandComponent` and resolves their dependencies as singletons through the plugin injector. In addition to commands declared with Cloud annotations, it supports:
+Winter discovers classes annotated with `@CommandComponent` and resolves their dependencies as singletons through the plugin injector (including Winter 3.0 `@Component` dependencies). In addition to commands declared with Cloud annotations, it supports:
 
 - `ArgumentParser<C, T>`: registers a parser for `T`, including inherited and sender-generic (`<C>`) implementations.
 - `ParameterInjector<C, T>`: registers parameter injection for `T`, including inherited and sender-generic (`<C>`) implementations.
@@ -136,7 +133,7 @@ Components can optionally declare Cloud's `@CommandContainer(priority = ...)` to
 
 ## Optional Kotlin and `cloud-kotlin` support
 
-Winter Command compiles against `cloud-kotlin` as a `compileOnly` dependency and exports **no transitive compile-time or runtime dependency** on Kotlin (`kotlin-stdlib`, `kotlin-reflect`, `kotlinx-coroutines`) or `cloud-kotlin`. Pure Java plugins need no extra libraries. At compile time, Winter's `@CommandComponent` processor generates direct singleton accessors and suspend-method metadata in `CommandComponentListWire`; at runtime, `CommandModule` probes the plugin `ClassLoader` without reflection and invokes available [Incendo Cloud Kotlin](https://cloud.incendo.org/kotlin/) APIs via direct typed bytecode calls:
+Winter Command compiles against `cloud-kotlin` as a `compileOnly` dependency and exports **no transitive compile-time or runtime dependency** on Kotlin (`kotlin-stdlib`, `kotlin-reflect`, `kotlinx-coroutines`) or `cloud-kotlin`. Pure Java plugins need no extra libraries. At compile time, Winter's `@CommandComponent` processor extension generates direct singleton accessors and suspend-method metadata in `CommandComponentListWire`; at runtime, `CommandModule` probes the plugin `ClassLoader` without reflection and invokes available [Incendo Cloud Kotlin](https://cloud.incendo.org/kotlin/) APIs via direct typed bytecode calls:
 
 - **Kotlin `object` and `companion object` components**: `@CommandComponent` can be placed on Kotlin classes, `object` declarations, or `companion object`s (including `@Inject` properties/methods) when processed with `kotlin("kapt")` and `-java-parameters`.
 - **`org.incendo:cloud-kotlin-coroutines-annotations`**: `installCoroutineSupport` is automatically applied to `AnnotationParser<C>` (unless a custom `AnnotationParserDecorator<C>` already installed it), enabling `suspend` `@Command`, `@Suggestions` (including `Sequence<Suggestion>`), and `@Parser` functions as well as Kotlin default parameter values.
@@ -157,8 +154,8 @@ kotlin {
 }
 
 dependencies {
-    implementation("com.thewinterframework:velocity:2.3.0")
-    kapt("com.thewinterframework:velocity:2.3.0")
+    implementation("com.github.anmvc.winter:velocity:b30ffd6ab7")
+    kapt("com.github.anmvc.winter:velocity:b30ffd6ab7")
 
     implementation("com.thewinterframework:command-velocity:3.1.0")
     kapt("com.thewinterframework:command-velocity:3.1.0")
@@ -187,7 +184,7 @@ The 3.x line changes artifact coordinates and extension contracts:
 .\gradlew.bat publishToMavenLocal
 ```
 
-Build with the included Gradle 9.1.0 wrapper and JDK 21 and JDK 25 available for the module toolchains.
+Build with the included Gradle 9.8.2 wrapper and JDK 21 available for the module toolchains.
 
 For an unpublished Winter version in a sibling checkout, validate with `.\gradlew.bat build --include-build ..\winter`.
 
