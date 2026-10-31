@@ -4,6 +4,7 @@ import com.google.inject.Injector;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
 import com.thewinterframework.command.CommandModule;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.incendo.cloud.CommandManager;
 import org.incendo.cloud.annotations.AnnotationParser;
@@ -13,23 +14,27 @@ import org.incendo.cloud.paper.util.sender.PaperSimpleSenderMapper;
 import org.incendo.cloud.paper.util.sender.Source;
 
 /** Winter command integration using Cloud's Paper sender wrappers. */
+@SuppressWarnings("UnstableApiUsage")
 public final class PaperCommandModule extends CommandModule<Source> {
     @Provides
     @Singleton
     PaperCommandManager<Source> paperCommandManager(final JavaPlugin plugin, final Injector injector) {
-        return PaperCommandManager.builder(senderMapper(injector, PaperSimpleSenderMapper.simpleSenderMapper()))
-                .executionCoordinator(ExecutionCoordinator.simpleCoordinator())
+        final var mapper = senderMapper(
+                injector, CommandSourceStack.class, PaperSimpleSenderMapper.simpleSenderMapper());
+        return PaperCommandManager.builder(mapper)
+                .executionCoordinator(executionCoordinator(injector, ExecutionCoordinator.simpleCoordinator()))
                 .buildOnEnable(plugin);
     }
 
     @Provides
+    @Singleton
     CommandManager<Source> commandManager(final PaperCommandManager<Source> commandManager) {
         return commandManager;
     }
 
     @Provides
     @Singleton
-    AnnotationParser<Source> annotationParser(final PaperCommandManager<Source> commandManager) {
+    AnnotationParser<Source> annotationParser(final CommandManager<Source> commandManager) {
         return new AnnotationParser<>(commandManager, Source.class);
     }
 }
