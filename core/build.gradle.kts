@@ -1,4 +1,7 @@
-plugins { `java-library` }
+plugins {
+    id("java-library")
+    id("maven-publish")
+}
 
 dependencies {
     api("com.github.anmvc.winter:core:${property("winterVersion")}")

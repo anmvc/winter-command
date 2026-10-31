@@ -4,11 +4,11 @@ Integrates [Incendo Cloud](https://cloud.incendo.org/) with Winter components an
 
 ## Modules
 
-| Artifact | Contents | Command sender |
-| --- | --- | --- |
-| `com.thewinterframework:command-core:3.1.0` | `@CommandComponent`, generic extensions, and shared registration | Generic (`C`) |
-| `com.thewinterframework:command-paper:3.1.0` | Command manager, annotation parser, and Winter processor for Paper | `org.incendo.cloud.paper.util.sender.Source` |
-| `com.thewinterframework:command-velocity:3.1.0` | Command manager, annotation parser, and Winter processor for Velocity | `com.velocitypowered.api.command.CommandSource` |
+| Artifact (local / Maven) | JitPack artifact | Contents | Command sender |
+| --- | --- | --- | --- |
+| `com.thewinterframework:command-core:3.1.0` | `com.github.anmvc.winter-command:command-core:<version>` | `@CommandComponent`, generic extensions, and shared registration | Generic (`C`) |
+| `com.thewinterframework:command-paper:3.1.0` | `com.github.anmvc.winter-command:command-paper:<version>` | Command manager, annotation parser, and Winter processor for Paper | `org.incendo.cloud.paper.util.sender.Source` |
+| `com.thewinterframework:command-velocity:3.1.0` | `com.github.anmvc.winter-command:command-velocity:<version>` | Command manager, annotation parser, and Winter processor for Velocity | `com.velocitypowered.api.command.CommandSource` |
 
 Each adapter includes `command-core` transitively. Use one adapter per plugin and annotation processor path. The core module and Velocity adapter have no dependencies on Bukkit or Paper.
 
@@ -27,7 +27,7 @@ Cloud versions its [core and annotations](https://github.com/Incendo/cloud/relea
 
 ## Installation
 
-The following examples use Gradle Kotlin DSL with the `anmvc/winter` fork on JitPack (`b30ffd6ab7`) and Winter Command `3.1.0`.
+The following examples use Gradle Kotlin DSL with `anmvc/winter` (`b30ffd6ab7`) and `anmvc/winter-command` via JitPack (replace `<version>` with a tag, commit hash, or `AI-SNAPSHOT`, or use `com.thewinterframework:command-*:3.1.0` when published locally with `publishToMavenLocal`).
 
 ```kotlin
 repositories {
@@ -52,8 +52,8 @@ dependencies {
     implementation("com.github.anmvc.winter:paper:b30ffd6ab7")
     annotationProcessor("com.github.anmvc.winter:paper:b30ffd6ab7")
 
-    implementation("com.thewinterframework:command-paper:3.1.0")
-    annotationProcessor("com.thewinterframework:command-paper:3.1.0")
+    implementation("com.github.anmvc.winter-command:command-paper:<version>")
+    annotationProcessor("com.github.anmvc.winter-command:command-paper:<version>")
 }
 ```
 
@@ -82,8 +82,8 @@ dependencies {
     implementation("com.github.anmvc.winter:velocity:b30ffd6ab7")
     annotationProcessor("com.github.anmvc.winter:velocity:b30ffd6ab7")
 
-    implementation("com.thewinterframework:command-velocity:3.1.0")
-    annotationProcessor("com.thewinterframework:command-velocity:3.1.0")
+    implementation("com.github.anmvc.winter-command:command-velocity:<version>")
+    annotationProcessor("com.github.anmvc.winter-command:command-velocity:<version>")
 }
 ```
 
@@ -157,8 +157,8 @@ dependencies {
     implementation("com.github.anmvc.winter:velocity:b30ffd6ab7")
     kapt("com.github.anmvc.winter:velocity:b30ffd6ab7")
 
-    implementation("com.thewinterframework:command-velocity:3.1.0")
-    kapt("com.thewinterframework:command-velocity:3.1.0")
+    implementation("com.github.anmvc.winter-command:command-velocity:<version>")
+    kapt("com.github.anmvc.winter-command:command-velocity:<version>")
 
     // Add only the cloud-kotlin artifacts you want to use:
     implementation("org.incendo:cloud-kotlin-coroutines-annotations:2.1.0")
