@@ -111,13 +111,14 @@ You can inject `VelocityCommandManager<CommandSource>`, `CommandManager<CommandS
 
 ## Command extensions
 
-Winter discovers classes annotated with `@CommandComponent` and resolves their dependencies through the plugin injector. In addition to commands declared with Cloud annotations, it supports:
+Winter discovers classes annotated with `@CommandComponent` and resolves their dependencies as singletons through the plugin injector. In addition to commands declared with Cloud annotations, it supports:
 
-- `ArgumentParser<C, T>`: registers a parser for `T`, including inherited implementations.
-- `ParameterInjector<C, T>`: registers parameter injection for `T`.
+- `ArgumentParser<C, T>`: registers a parser for `T`, including inherited and sender-generic (`<C>`) implementations.
+- `ParameterInjector<C, T>`: registers parameter injection for `T`, including inherited and sender-generic (`<C>`) implementations.
 - `CommandManagerConfiguration<C>`: configures the command manager before annotated commands are parsed.
 - `AnnotationParserDecorator<C>`: customizes the annotation parser before commands are registered.
 - `SenderMapper<N, C>`: replaces the default sender mapper. `N` is `CommandSourceStack` on Paper and `CommandSource` on Velocity. `C` remains the adapter's command sender type.
+- `ExecutionCoordinator<C>`: replaces the default `ExecutionCoordinator.simpleCoordinator()` on Paper and Velocity (can also be supplied via an explicit Guice `ExecutionCoordinator<C>` binding).
 
 For example, a Velocity configuration implements:
 
@@ -131,7 +132,43 @@ public final class Commands implements CommandManagerConfiguration<CommandSource
 }
 ```
 
-Parsers, parameter injectors, and decorators are registered first. Configurations are then applied, followed by annotation parsing for commands. Use constructor injection for component dependencies. Command managers use `ExecutionCoordinator.simpleCoordinator()`; handlers must respect the platform's threading requirements.
+Components can optionally declare Cloud's `@CommandContainer(priority = ...)` to control registration order (higher priority runs first). Parsers, parameter injectors, and decorators are registered first, configurations are applied next, and all active components are then batch-parsed together so cross-component `@Suggestions`, `@Parser`, `@Default`, and `@ExceptionHandler` methods resolve regardless of class order. Registered commands are automatically unregistered when the module disables. Use constructor injection for component dependencies. Command managers default to `ExecutionCoordinator.simpleCoordinator()` unless overridden; handlers must respect the platform's threading requirements.
+
+## Optional Kotlin and `cloud-kotlin` support
+
+Winter Command compiles against `cloud-kotlin` as a `compileOnly` dependency and exports **no transitive compile-time or runtime dependency** on Kotlin (`kotlin-stdlib`, `kotlin-reflect`, `kotlinx-coroutines`) or `cloud-kotlin`. Pure Java plugins need no extra libraries. At compile time, Winter's `@CommandComponent` processor generates direct singleton accessors and suspend-method metadata in `CommandComponentListWire`; at runtime, `CommandModule` probes the plugin `ClassLoader` without reflection and invokes available [Incendo Cloud Kotlin](https://cloud.incendo.org/kotlin/) APIs via direct typed bytecode calls:
+
+- **Kotlin `object` and `companion object` components**: `@CommandComponent` can be placed on Kotlin classes, `object` declarations, or `companion object`s (including `@Inject` properties/methods) when processed with `kotlin("kapt")` and `-java-parameters`.
+- **`org.incendo:cloud-kotlin-coroutines-annotations`**: `installCoroutineSupport` is automatically applied to `AnnotationParser<C>` (unless a custom `AnnotationParserDecorator<C>` already installed it), enabling `suspend` `@Command`, `@Suggestions` (including `Sequence<Suggestion>`), and `@Parser` functions as well as Kotlin default parameter values.
+- **`org.incendo:cloud-kotlin-coroutines`**: `@CommandComponent` implementations of `SuspendingArgumentParser<C, T>` are automatically adapted and registered in `ParserRegistry<C>` before `CommandManagerConfiguration<C>` runs, and `@CommandComponent` implementations of `SuspendingSuggestionProvider<C>` and `SuspendingExecutionHandler<C>` are sender-type validated and injectable into builders.
+- **Custom coroutine scope and context**: Bind `CoroutineScope` and/or `CoroutineContext` in Guice or annotate an implementation with `@CommandComponent`; otherwise `GlobalScope` and `EmptyCoroutineContext` are used (matching Cloud's defaults).
+- **`org.incendo:cloud-kotlin-extensions`**: Builder DSL helpers (`buildAndRegister`, `MutableCommandBuilder`, `suspendingHandler`, etc.) work inside `CommandManagerConfiguration<C>`, and `asyncCoordinator()` can be wired via an `ExecutionCoordinator<C>` binding or `@CommandComponent`.
+
+```kotlin
+plugins {
+    kotlin("jvm") version "2.1.0"
+    kotlin("kapt") version "2.1.0"
+}
+
+kotlin {
+    compilerOptions {
+        javaParameters.set(true)
+    }
+}
+
+dependencies {
+    implementation("com.thewinterframework:velocity:2.3.0")
+    kapt("com.thewinterframework:velocity:2.3.0")
+
+    implementation("com.thewinterframework:command-velocity:3.1.0")
+    kapt("com.thewinterframework:command-velocity:3.1.0")
+
+    // Add only the cloud-kotlin artifacts you want to use:
+    implementation("org.incendo:cloud-kotlin-coroutines-annotations:2.1.0")
+    implementation("org.incendo:cloud-kotlin-coroutines:2.1.0")
+    implementation("org.incendo:cloud-kotlin-extensions:2.1.0")
+}
+```
 
 ## Migration from 2.0.0
 

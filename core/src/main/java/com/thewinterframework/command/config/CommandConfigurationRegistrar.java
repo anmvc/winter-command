@@ -5,6 +5,7 @@ import org.incendo.cloud.CommandManager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Collects configurations to apply before annotated commands are parsed.
@@ -19,7 +20,7 @@ public class CommandConfigurationRegistrar<C> {
      * @param configuration the configuration
      */
     public void register(final CommandManagerConfiguration<C> configuration) {
-        configurations.add(configuration);
+        configurations.add(Objects.requireNonNull(configuration, "configuration"));
     }
 
     /**
@@ -27,7 +28,10 @@ public class CommandConfigurationRegistrar<C> {
      * @param commandManager the command manager
      */
     public void configure(final CommandManager<C> commandManager) {
-        configurations.forEach(configuration -> configuration.configure(commandManager));
+        Objects.requireNonNull(commandManager, "commandManager");
+        for (int i = 0; i < configurations.size(); i++) {
+            configurations.get(i).configure(commandManager);
+        }
     }
 
     /** Clears configurations when the module stops. */
